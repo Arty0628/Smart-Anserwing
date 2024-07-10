@@ -1,5 +1,6 @@
 package com.yupi.zhidada.controller;
 
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yupi.zhidada.annotation.AuthCheck;
 import com.yupi.zhidada.common.BaseResponse;
@@ -13,9 +14,12 @@ import com.yupi.zhidada.model.dto.userAnswer.UserAnswerAddRequest;
 import com.yupi.zhidada.model.dto.userAnswer.UserAnswerEditRequest;
 import com.yupi.zhidada.model.dto.userAnswer.UserAnswerQueryRequest;
 import com.yupi.zhidada.model.dto.userAnswer.UserAnswerUpdateRequest;
+import com.yupi.zhidada.model.entity.App;
 import com.yupi.zhidada.model.entity.UserAnswer;
 import com.yupi.zhidada.model.entity.User;
+import com.yupi.zhidada.model.enums.ReviewStatusEnum;
 import com.yupi.zhidada.model.vo.UserAnswerVO;
+import com.yupi.zhidada.service.AppService;
 import com.yupi.zhidada.service.UserAnswerService;
 import com.yupi.zhidada.service.UserService;
 import lombok.extern.slf4j.Slf4j;
@@ -24,12 +28,11 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.List;
 
 /**
  * 用户答案接口
  *
- * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://www.code-nav.cn">编程导航学习圈</a>
  */
 @RestController
 @RequestMapping("/userAnswer")
@@ -41,6 +44,8 @@ public class UserAnswerController {
 
     @Resource
     private UserService userService;
+    @Resource
+    private AppService appService;
 
     // region 增删改查
 
@@ -54,12 +59,21 @@ public class UserAnswerController {
     @PostMapping("/add")
     public BaseResponse<Long> addUserAnswer(@RequestBody UserAnswerAddRequest userAnswerAddRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(userAnswerAddRequest == null, ErrorCode.PARAMS_ERROR);
-        // todo 在此处将实体类和 DTO 进行转换
+        //  在此处将实体类和 DTO 进行转换
         UserAnswer userAnswer = new UserAnswer();
         BeanUtils.copyProperties(userAnswerAddRequest, userAnswer);
+        List<String> choices = userAnswerAddRequest.getChoices();
+        userAnswer.setChoices(JSONUtil.toJsonStr(choices));
         // 数据校验
         userAnswerService.validUserAnswer(userAnswer, true);
-        // todo 填充默认值
+        //判断app是否存在
+        Long appId = userAnswerAddRequest.getAppId();
+        App app = appService.getById(appId);
+        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR);
+        if (!ReviewStatusEnum.PASS.equals(ReviewStatusEnum.getEnumByValue(app.getReviewStatus()))) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "应用未通过审核，无法答题");
+        }
+        //  填充默认值
         User loginUser = userService.getLoginUser(request);
         userAnswer.setUserId(loginUser.getId());
         // 写入数据库
@@ -109,9 +123,11 @@ public class UserAnswerController {
         if (userAnswerUpdateRequest == null || userAnswerUpdateRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        // todo 在此处将实体类和 DTO 进行转换
+        // 在此处将实体类和 DTO 进行转换
         UserAnswer userAnswer = new UserAnswer();
         BeanUtils.copyProperties(userAnswerUpdateRequest, userAnswer);
+        List<String> choices = userAnswerUpdateRequest.getChoices();
+        userAnswer.setChoices(JSONUtil.toJsonStr(choices));
         // 数据校验
         userAnswerService.validUserAnswer(userAnswer, false);
         // 判断是否存在
@@ -215,9 +231,11 @@ public class UserAnswerController {
         if (userAnswerEditRequest == null || userAnswerEditRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        // todo 在此处将实体类和 DTO 进行转换
+        // 在此处将实体类和 DTO 进行转换
         UserAnswer userAnswer = new UserAnswer();
         BeanUtils.copyProperties(userAnswerEditRequest, userAnswer);
+        List<String> choices = userAnswerEditRequest.getChoices();
+        userAnswer.setChoices(JSONUtil.toJsonStr(choices));
         // 数据校验
         userAnswerService.validUserAnswer(userAnswer, false);
         User loginUser = userService.getLoginUser(request);

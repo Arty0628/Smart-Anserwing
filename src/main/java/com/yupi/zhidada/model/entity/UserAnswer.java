@@ -14,7 +14,7 @@ import java.util.Date;
 @Data
 public class UserAnswer implements Serializable {
     /**
-     * 
+     *
      */
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;

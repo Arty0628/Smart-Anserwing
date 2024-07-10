@@ -14,7 +14,7 @@ import java.io.Serializable;
  */
 @EqualsAndHashCode(callSuper = true)
 @Data
-public class APPQueryRequest extends PageRequest implements Serializable {
+public class AppQueryRequest extends PageRequest implements Serializable {
 
     /**
      * id
@@ -24,51 +24,57 @@ public class APPQueryRequest extends PageRequest implements Serializable {
     /**
      * 应用名
      */
-    private String appname;
+    private String appName;
 
     /**
      * 应用描述
      */
-    private String appdesc;
+    private String appDesc;
 
     /**
      * 应用图标
      */
-    private String appicon;
+    private String appIcon;
 
     /**
      * 应用类型（0-得分类，1-测评类）
      */
-    private Integer apptype;
+    private Integer appType;
 
     /**
      * 评分策略（0-自定义，1-AI）
      */
-    private Integer scoringstrategy;
+    private Integer scoringStrategy;
 
     /**
      * 审核状态：0-待审核, 1-通过, 2-拒绝
      */
-    private Integer reviewstatus;
+    private Integer reviewStatus;
 
     /**
      * 审核信息
      */
-    private String reviewmessage;
+    private String reviewMessage;
 
     /**
      * 审核人 id
      */
-    private Long reviewerid;
+    private Long reviewerId;
 
     /**
      * 创建用户 id
      */
-    private Long userid;
+    private Long userId;
+
+    /**
+     * id
+     */
+    private Long notId;
 
     /**
      * 搜索词
      */
     private String searchText;
+
     private static final long serialVersionUID = 1L;
 }
