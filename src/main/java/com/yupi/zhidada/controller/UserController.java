@@ -18,6 +18,7 @@ import com.yupi.zhidada.model.dto.user.UserUpdateRequest;
 import com.yupi.zhidada.model.entity.User;
 import com.yupi.zhidada.model.vo.LoginUserVO;
 import com.yupi.zhidada.model.vo.UserVO;
+import com.yupi.zhidada.scoring.ScoringStrategyExecutor;
 import com.yupi.zhidada.service.UserService;
 
 import java.util.List;
@@ -50,7 +51,6 @@ public class UserController {
 
     @Resource
     private UserService userService;
-
 
 
     // region 登录相关

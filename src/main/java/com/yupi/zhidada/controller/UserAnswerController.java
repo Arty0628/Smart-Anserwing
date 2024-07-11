@@ -19,6 +19,7 @@ import com.yupi.zhidada.model.entity.UserAnswer;
 import com.yupi.zhidada.model.entity.User;
 import com.yupi.zhidada.model.enums.ReviewStatusEnum;
 import com.yupi.zhidada.model.vo.UserAnswerVO;
+import com.yupi.zhidada.scoring.ScoringStrategyExecutor;
 import com.yupi.zhidada.service.AppService;
 import com.yupi.zhidada.service.UserAnswerService;
 import com.yupi.zhidada.service.UserService;
@@ -46,6 +47,8 @@ public class UserAnswerController {
     private UserService userService;
     @Resource
     private AppService appService;
+    @Resource
+    private ScoringStrategyExecutor scoringStrategyExecutor;
 
     // region 增删改查
 
@@ -81,6 +84,15 @@ public class UserAnswerController {
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
         // 返回新写入的数据 id
         long newUserAnswerId = userAnswer.getId();
+        //调用评分模块
+        try {
+            UserAnswer userAnswerWithResult= scoringStrategyExecutor.doScore(choices, app);
+            userAnswerWithResult.setId(newUserAnswerId);
+            userAnswerService.updateById(userAnswerWithResult);
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new BusinessException(ErrorCode.OPERATION_ERROR,"评分错误");
+        }
         return ResultUtils.success(newUserAnswerId);
     }
 

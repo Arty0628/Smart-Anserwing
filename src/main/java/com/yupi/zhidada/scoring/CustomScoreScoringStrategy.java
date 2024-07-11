@@ -18,6 +18,7 @@ import java.util.Optional;
 /**
  * 自定义打分(打分类应用)
  */
+@ScoringStrategyConfig(appType = 0, scoringStrategy = 0)
 public class CustomScoreScoringStrategy implements ScoringStrategy {
     @Resource
     private QuestionService questionService;
