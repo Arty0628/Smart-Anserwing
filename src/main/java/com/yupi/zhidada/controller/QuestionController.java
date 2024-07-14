@@ -309,7 +309,7 @@ public class QuestionController {
         String result = aiManager.doSyncRequest(GENERATE_QUESTION_SYSTEM_MESSAGE, userMessage, null);
         //截取需要的JSON信息
         int start = result.indexOf("[");
-        int end = result.indexOf("]");
+        int end = result.lastIndexOf("]");
         String json = result.substring(start, end + 1);
         List<QuestionContentDTO> questionContentDTOList = JSONUtil.toList(json, QuestionContentDTO.class);
         return ResultUtils.success(questionContentDTOList);
