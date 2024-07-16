@@ -352,6 +352,7 @@ public class QuestionController {
                 .map(modelData -> modelData.getChoices().get(0).getDelta().getContent())
                 .map(message -> message.replaceAll("\\s",""))
                 .filter(StrUtil::isNotBlank)
+                //拆分为字符流
                 .flatMap(message -> {
                     List<Character> characterList = new ArrayList<>();
                     for(char c : message.toCharArray()){
