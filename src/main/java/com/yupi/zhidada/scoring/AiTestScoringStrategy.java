@@ -6,6 +6,7 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.yupi.zhidada.config.RedissonConfig;
 import com.yupi.zhidada.manager.AiManager;
 import com.yupi.zhidada.model.dto.question.QuestionAnswerDTO;
 import com.yupi.zhidada.model.dto.question.QuestionContentDTO;
@@ -16,6 +17,8 @@ import com.yupi.zhidada.model.entity.UserAnswer;
 import com.yupi.zhidada.model.vo.QuestionVO;
 import com.yupi.zhidada.service.QuestionService;
 import com.yupi.zhidada.service.ScoringResultService;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.util.DigestUtils;
 
 import javax.annotation.Resource;
@@ -34,6 +37,10 @@ public class AiTestScoringStrategy implements ScoringStrategy {
     private QuestionService questionService;
     @Resource
     private AiManager aiManager;
+    @Resource
+    private RedissonClient redissonClient;
+    //分布式锁的key
+    private static final String AI_ANSWER_LOCK = "AI_ANSWER_LOCK";
 
     /**
      * Ai 评分结果 本地缓存
@@ -81,33 +88,50 @@ public class AiTestScoringStrategy implements ScoringStrategy {
             userAnswer.setChoices(jsonStr);
             return userAnswer;
         }
+        //定义锁 需要相同的key去竞争一把锁
+        RLock lock = redissonClient.getLock(AI_ANSWER_LOCK);
+        try {
+            //竞争锁
+            boolean res = lock.tryLock(3, 15, TimeUnit.SECONDS);
+            //没抢到锁，强行返回
+            if(!res){
+                return null;
+            }
+            // 抢到锁了，执行后续业务逻辑
+            Question question = questionService.getOne(
+                    Wrappers.lambdaQuery(Question.class).eq(Question::getAppId, appId)
+            );
+            QuestionVO questionVO = QuestionVO.objToVo(question);
+            List<QuestionContentDTO> questionContent = questionVO.getQuestionContent();
 
-        Question question = questionService.getOne(
-                Wrappers.lambdaQuery(Question.class).eq(Question::getAppId, appId)
-        );
-        QuestionVO questionVO = QuestionVO.objToVo(question);
-        List<QuestionContentDTO> questionContent = questionVO.getQuestionContent();
+            //2.调用AI获取结果
+            //封装Prompt
+            String userMessage = getAiTestScoringUserMessage(app, questionContent, choices);
+            //AI生成
+            String result = aiManager.doSyncStableRequest(AI_TEST_SCORING_SYSTEM_MESSAGE, userMessage);
+            //截取需要的JSON信息
+            int start = result.indexOf("{");
+            int end = result.lastIndexOf("}");
+            String json = result.substring(start, end + 1);
 
-        //2.调用AI获取结果
-        //封装Prompt
-        String userMessage = getAiTestScoringUserMessage(app, questionContent, choices);
-        //AI生成
-        String result = aiManager.doSyncStableRequest(AI_TEST_SCORING_SYSTEM_MESSAGE, userMessage);
-        //截取需要的JSON信息
-        int start = result.indexOf("{");
-        int end = result.lastIndexOf("}");
-        String json = result.substring(start, end + 1);
+            //如果没有缓存 缓存结果
+            answerCacheMap.put(cacheKey,json);
 
-        //如果没有缓存 缓存结果
-        answerCacheMap.put(cacheKey,json);
+            //4.构造返回值，填充答案对象
+            UserAnswer userAnswer = JSONUtil.toBean(json, UserAnswer.class);
+            userAnswer.setAppId(appId);
+            userAnswer.setAppType(app.getAppType());
+            userAnswer.setScoringStrategy(app.getScoringStrategy());
+            userAnswer.setChoices(jsonStr);
+            return userAnswer;
+        }finally {
+            if(lock != null && lock.isLocked()){
+                if(lock.isHeldByCurrentThread()){
+                    lock.unlock();
+                }
+            }
+        }
 
-        //4.构造返回值，填充答案对象
-        UserAnswer userAnswer = JSONUtil.toBean(json, UserAnswer.class);
-        userAnswer.setAppId(appId);
-        userAnswer.setAppType(app.getAppType());
-        userAnswer.setScoringStrategy(app.getScoringStrategy());
-        userAnswer.setChoices(jsonStr);
-        return userAnswer;
     }
     private String getAiTestScoringUserMessage(App app, List<QuestionContentDTO> questionContentDTOList, List<String> choices) {
         StringBuilder userMessage = new StringBuilder();
