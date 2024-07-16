@@ -1,5 +1,6 @@
 package com.yupi.zhidada.controller;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yupi.zhidada.annotation.AuthCheck;
@@ -20,13 +21,19 @@ import com.yupi.zhidada.model.vo.QuestionVO;
 import com.yupi.zhidada.service.AppService;
 import com.yupi.zhidada.service.QuestionService;
 import com.yupi.zhidada.service.UserService;
+import com.zhipu.oapi.service.v4.model.ModelData;
+import io.reactivex.Flowable;
+import io.reactivex.schedulers.Schedulers;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 题目接口
@@ -313,5 +320,66 @@ public class QuestionController {
         String json = result.substring(start, end + 1);
         List<QuestionContentDTO> questionContentDTOList = JSONUtil.toList(json, QuestionContentDTO.class);
         return ResultUtils.success(questionContentDTOList);
+    }
+
+    /**
+     * 以SSE形式生成题目
+     * @param aiGenerateQuestionRequest
+     * @return
+     */
+    @GetMapping("/ai_generate/sse")
+    public SseEmitter aiGenerateQuestionSSE(AiGenerateQuestionRequest aiGenerateQuestionRequest) {
+        ThrowUtils.throwIf(aiGenerateQuestionRequest == null,ErrorCode.PARAMS_ERROR);
+        //获取参数
+        Long appId = aiGenerateQuestionRequest.getAppId();
+        int questionNumber = aiGenerateQuestionRequest.getQuestionNumber();
+        int optionNumber = aiGenerateQuestionRequest.getOptionNumber();
+        //获取应用信息
+        App app = appService.getById(appId);
+        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR);
+        //封装prompt
+        String userMessage = getGenerateQuestionUserMessage(app, questionNumber, optionNumber);
+        //创建 SSE 连接对象 0 - 表示永不超时
+        SseEmitter sseEmitter = new SseEmitter(0L);
+        //AI生成 SSE 流式返回
+        Flowable<ModelData> modelDataFlowable = aiManager.doStreamRequest(GENERATE_QUESTION_SYSTEM_MESSAGE, userMessage, null);
+        //考虑可能是多线程的，定义原子类  左括号计数器
+        AtomicInteger counter = new AtomicInteger(0); //当回归为0时，表示左括号匹配右括号
+        //需要拼接字符串
+        StringBuilder stringBuilder = new StringBuilder();
+        modelDataFlowable
+                .observeOn(Schedulers.io())
+                .map(modelData -> modelData.getChoices().get(0).getDelta().getContent())
+                .map(message -> message.replaceAll("\\s",""))
+                .filter(StrUtil::isNotBlank)
+                .flatMap(message -> {
+                    List<Character> characterList = new ArrayList<>();
+                    for(char c : message.toCharArray()){
+                        characterList.add(c);
+                    }
+                    return Flowable.fromIterable(characterList);
+                })
+                .doOnNext(c -> {
+                    // 如果是”{“ 计数器+1
+                    if(c == '{'){
+                        counter.addAndGet(1);
+                    }
+                    if(counter.get() > 0){
+                        stringBuilder.append(c);
+                    }
+                    if(c == '}'){
+                        counter.addAndGet(-1);
+                        if(counter.get() == 0){
+                            //可以拼接一道题目了 并且通过SSE返回给前端
+                            sseEmitter.send(JSONUtil.toJsonStr(stringBuilder.toString()));
+                            //拼接完一道题要重置
+                            stringBuilder.setLength(0);
+                        }
+                    }
+                })
+                .doOnError((e) -> log.error("sse error",e))
+                .doOnComplete(sseEmitter::complete)
+                .subscribe();
+        return sseEmitter;
     }
 }
