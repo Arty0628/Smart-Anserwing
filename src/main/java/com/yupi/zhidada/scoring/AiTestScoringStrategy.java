@@ -125,10 +125,8 @@ public class AiTestScoringStrategy implements ScoringStrategy {
             userAnswer.setChoices(jsonStr);
             return userAnswer;
         }finally {
-            if(lock != null && lock.isLocked()){
-                if(lock.isHeldByCurrentThread()){
+            if(lock != null && lock.isLocked() && lock.isHeldByCurrentThread()){
                     lock.unlock();
-                }
             }
         }
 
