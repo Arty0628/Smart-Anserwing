@@ -1,6 +1,7 @@
 package com.yupi.zhidada;
 
 import io.reactivex.Flowable;
+import io.reactivex.Scheduler;
 import io.reactivex.schedulers.Schedulers;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,4 +24,23 @@ public class RxJavaTest {
         //主线程睡眠，以便观察到结果
         Thread.sleep(10000L);
     }
+
+    //以下代码，JVM设置为 -Xms64m -Xmx64m 后会报OOM
+    //RxJava自定义的线程池使用的是无界队列，会一直堆积
+
+//    @Test
+//    public void test1() {
+//        Scheduler io = Schedulers.io();
+//        while(true){
+//            io.scheduleDirect(() -> {
+//                System.out.println(Thread.currentThread().getName() + "hello");
+//                try{
+//                    Thread.sleep(50000L);
+//                } catch (InterruptedException e) {
+//                    e.printStackTrace();
+//                }
+//            });
+//        }
+//    }
+
 }
