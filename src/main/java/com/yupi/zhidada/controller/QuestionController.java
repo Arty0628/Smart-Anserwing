@@ -23,6 +23,7 @@ import com.yupi.zhidada.service.QuestionService;
 import com.yupi.zhidada.service.UserService;
 import com.zhipu.oapi.service.v4.model.ModelData;
 import io.reactivex.Flowable;
+import io.reactivex.Scheduler;
 import io.reactivex.schedulers.Schedulers;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -54,6 +55,8 @@ public class QuestionController {
     private AppService appService;
     @Resource
     private AiManager aiManager;
+    @Resource
+    private Scheduler vipScheduler;
 
     // region 增删改查
 
@@ -328,7 +331,7 @@ public class QuestionController {
      * @return
      */
     @GetMapping("/ai_generate/sse")
-    public SseEmitter aiGenerateQuestionSSE(AiGenerateQuestionRequest aiGenerateQuestionRequest) {
+    public SseEmitter aiGenerateQuestionSSE(AiGenerateQuestionRequest aiGenerateQuestionRequest,HttpServletRequest request) {
         ThrowUtils.throwIf(aiGenerateQuestionRequest == null,ErrorCode.PARAMS_ERROR);
         //获取参数
         Long appId = aiGenerateQuestionRequest.getAppId();
@@ -347,8 +350,14 @@ public class QuestionController {
         AtomicInteger counter = new AtomicInteger(0); //当回归为0时，表示左括号匹配右括号
         //需要拼接字符串
         StringBuilder stringBuilder = new StringBuilder();
+        // 默认全局线程池
+        User loginUser = userService.getLoginUser(request);
+        Scheduler scheduler = Schedulers.io();
+        if ("vip".equals(loginUser.getUserRole())) {
+            scheduler = vipScheduler;
+        }
         modelDataFlowable
-                .observeOn(Schedulers.io())
+                .observeOn(scheduler)
                 .map(modelData -> modelData.getChoices().get(0).getDelta().getContent())
                 .map(message -> message.replaceAll("\\s",""))
                 .filter(StrUtil::isNotBlank)
@@ -372,6 +381,74 @@ public class QuestionController {
                         counter.addAndGet(-1);
                         if(counter.get() == 0){
                             //可以拼接一道题目了 并且通过SSE返回给前端
+                            sseEmitter.send(JSONUtil.toJsonStr(stringBuilder.toString()));
+                            //拼接完一道题要重置
+                            stringBuilder.setLength(0);
+                        }
+                    }
+                })
+                .doOnError((e) -> log.error("sse error",e))
+                .doOnComplete(sseEmitter::complete)
+                .subscribe();
+        return sseEmitter;
+    }
+
+    @GetMapping("/ai_generate/sse/test")
+    public SseEmitter aiGenerateQuestionSSETest(AiGenerateQuestionRequest aiGenerateQuestionRequest,
+                                                boolean isVip) {
+        ThrowUtils.throwIf(aiGenerateQuestionRequest == null,ErrorCode.PARAMS_ERROR);
+        //获取参数
+        Long appId = aiGenerateQuestionRequest.getAppId();
+        int questionNumber = aiGenerateQuestionRequest.getQuestionNumber();
+        int optionNumber = aiGenerateQuestionRequest.getOptionNumber();
+        //获取应用信息
+        App app = appService.getById(appId);
+        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR);
+        //封装prompt
+        String userMessage = getGenerateQuestionUserMessage(app, questionNumber, optionNumber);
+        //创建 SSE 连接对象 0 - 表示永不超时
+        SseEmitter sseEmitter = new SseEmitter(0L);
+        //AI生成 SSE 流式返回
+        Flowable<ModelData> modelDataFlowable = aiManager.doStreamRequest(GENERATE_QUESTION_SYSTEM_MESSAGE, userMessage, null);
+        //考虑可能是多线程的，定义原子类  左括号计数器
+        AtomicInteger counter = new AtomicInteger(0); //当回归为0时，表示左括号匹配右括号
+        //需要拼接字符串
+        StringBuilder stringBuilder = new StringBuilder();
+        //自定义线程池  默认全局线程池
+        Scheduler scheduler = Schedulers.single();
+        if(isVip){
+            scheduler = vipScheduler;
+        }
+        modelDataFlowable
+                .observeOn(scheduler)
+                .map(modelData -> modelData.getChoices().get(0).getDelta().getContent())
+                .map(message -> message.replaceAll("\\s",""))
+                .filter(StrUtil::isNotBlank)
+                //拆分为字符流
+                .flatMap(message -> {
+                    List<Character> characterList = new ArrayList<>();
+                    for(char c : message.toCharArray()){
+                        characterList.add(c);
+                    }
+                    return Flowable.fromIterable(characterList);
+                })
+                .doOnNext(c -> {
+                    // 如果是”{“ 计数器+1
+                    if(c == '{'){
+                        counter.addAndGet(1);
+                    }
+                    if(counter.get() > 0){
+                        stringBuilder.append(c);
+                    }
+                    if(c == '}'){
+                        counter.addAndGet(-1);
+                        if(counter.get() == 0){
+                            //可以拼接一道题目了 并且通过SSE返回给前端
+
+                            //模拟用户阻塞
+                            if(!isVip){
+                                Thread.sleep(10000L);
+                            }
                             sseEmitter.send(JSONUtil.toJsonStr(stringBuilder.toString()));
                             //拼接完一道题要重置
                             stringBuilder.setLength(0);
