@@ -1,8 +1,14 @@
 server:
   port: 8101
+  servlet:
+    session:
+      cookie:
+        max-age: 2592000
+        same-site: none
+        secure: true
 spring:
   # 数据库配置
-  # todo 需替换配置
+  # 需替换配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/zhidada
@@ -15,15 +21,64 @@ spring:
     host: localhost
     port: 6379
     timeout: 5000
-    password: 123456
-
-mybatis-plus:
-  configuration:
-    # 生产环境关闭日志
-    log-impl: ''
+    #password: 123456
 # 接口文档配置
 knife4j:
   basic:
     enable: true
     username: root
     password: 123456
+
+  # 分库分表配置
+  shardingsphere:
+    #数据源配置
+    datasource:
+      names: zhidada
+      zhidada:
+        type: com.zaxxer.hikari.HikariDataSource
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        url: jdbc:mysql://localhost:3306/zhidada
+        username: root
+        password: zyh
+    # 多数据源以逗号隔开即可
+    # 规则配置
+    rules:
+      sharding:
+        # 分片算法配置
+        sharding-algorithms:
+          # 自定义分片规则名
+          answer-table-inline:
+            ## inline 类型是简单的配置文件里面就能写的类型，其他还有自定义类等等
+            type: INLINE
+            props:
+              algorithm-expression: user_answer_$->{appId % 2}
+        tables:
+          user_answer:
+            actual-data-nodes: zhidada.user_answer_$->{0..1}
+            # 分表策略
+            table-strategy:
+              standard:
+                sharding-column: appId
+                sharding-algorithm-name: answer-table-inline
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: false
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: isDelete # 全局逻辑删除的实体字段名
+      logic-delete-value: 1 # 逻辑已删除值（默认为 1）
+      logic-not-delete-value: 0 # 逻辑未删除值（默认为 0）
+# 微信相关
+
+# 对象存储
+# todo 需替换配置
+cos:
+  client:
+    accessKey: xxx
+    secretKey: xxx
+    region: xxx
+    bucket: xxx
+# AI配置
+ai:
+  apiKey: 48ee669e1ddea54bc5e6007694d11876.fCnSQEtD1mEVRhWD

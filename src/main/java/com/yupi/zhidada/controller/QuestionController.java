@@ -393,6 +393,7 @@ public class QuestionController {
         return sseEmitter;
     }
 
+    //仅测试使用
     @GetMapping("/ai_generate/sse/test")
     public SseEmitter aiGenerateQuestionSSETest(AiGenerateQuestionRequest aiGenerateQuestionRequest,
                                                 boolean isVip) {

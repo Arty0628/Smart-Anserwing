@@ -73,6 +73,9 @@ public class UserAnswerController {
         userAnswerService.validUserAnswer(userAnswer, true);
         //判断app是否存在
         Long appId = userAnswerAddRequest.getAppId();
+        if (appId == null || appId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "应用不存在");
+        }
         App app = appService.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR);
         if (!ReviewStatusEnum.PASS.equals(ReviewStatusEnum.getEnumByValue(app.getReviewStatus()))) {
@@ -274,6 +277,7 @@ public class UserAnswerController {
     // endregion
     @GetMapping("/generate/id")
     public BaseResponse<Long> generateUserAnswerId() {
+        //雪花算法生成全局唯一id
         return ResultUtils.success(IdUtil.getSnowflakeNextId());
     }
 

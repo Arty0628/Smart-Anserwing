@@ -4,8 +4,9 @@ use zhidada;
 -- 用户表初始数据
 INSERT INTO user (id, userAccount, userPassword, unionId, mpOpenId, userName, userAvatar, userProfile, userRole,
                   createTime, updateTime, isDelete)
-VALUES (88, 'zyh', 'zyh062811', null, null, '城北阿南',null,
-        'ok了老铁', 'admin', '2024-07-11 11:13:13', '2024-07-011 15:07:48', 0);
+VALUES (2, 'zyh', 'b0dd3697a192885d7c055db46155b26a', null, null, '阿南',
+        'https://pic.code-nav.cn/post_picture/1766335889719549953/0S16VD97-oj.webp',
+        null, 'admin', '2024-05-09 11:13:13', '2024-05-09 15:07:48', 0);
 
 -- 应用表初始数据
 INSERT INTO app (id, appName, appDesc, appIcon, appType, scoringStrategy, reviewStatus, reviewMessage, reviewerId,
